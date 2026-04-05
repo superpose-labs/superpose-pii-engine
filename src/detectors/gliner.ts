@@ -1,21 +1,21 @@
 import type { Span, PrivacyLevel, EngineOptions } from '../types.js'
 import { GLINER_LABELS, GLINER_LABEL_TO_TYPE } from '../levels.js'
 
-let glinerInstance: any = null
-let glinerModelId: string | null = null
+let initPromise: Promise<any> | null = null
+let cachedModelId: string | null = null
 
-export async function detectGliner(
-  text: string,
-  level: PrivacyLevel,
-  options: EngineOptions = {},
-): Promise<Span[]> {
-  const modelPath = options.glinerModelPath || 'onnx-community/gliner_multi_pii-v1'
-  const threshold = options.glinerThreshold ?? 0.3
-  const executionProvider = options.glinerExecutionProvider || 'cpu'
-  const onnxPath = options.glinerOnnxPath
+async function getGlinerInstance(
+  modelPath: string,
+  executionProvider: string,
+  onnxPath: string | undefined,
+) {
+  // Return cached promise if same model is being/was loaded
+  if (initPromise && cachedModelId === modelPath) {
+    return initPromise
+  }
 
-  if (!glinerInstance || glinerModelId !== modelPath) {
-    // Try gliner/node first (Node.js), fall back to gliner (browser)
+  cachedModelId = modelPath
+  initPromise = (async () => {
     let Gliner: any
     try {
       const mod = await import('gliner/node')
@@ -29,21 +29,34 @@ export async function detectGliner(
     if (onnxPath) {
       onnxSettings.modelPath = onnxPath
     } else {
-      // In Node, attempt to download and cache the model
       onnxSettings.modelPath = await resolveOnnxPath(modelPath)
     }
 
-    glinerInstance = new Gliner({
+    const instance = new Gliner({
       tokenizerPath: modelPath,
       onnxSettings,
       maxWidth: 12,
     })
-    await glinerInstance.initialize()
-    glinerModelId = modelPath
-  }
+    await instance.initialize()
+    return instance
+  })()
+
+  return initPromise
+}
+
+export async function detectGliner(
+  text: string,
+  level: PrivacyLevel,
+  options: EngineOptions = {},
+): Promise<Span[]> {
+  const modelPath = options.glinerModelPath || 'onnx-community/gliner_multi_pii-v1'
+  const threshold = options.glinerThreshold ?? 0.3
+  const executionProvider = options.glinerExecutionProvider || 'cpu'
+
+  const instance = await getGlinerInstance(modelPath, executionProvider, options.glinerOnnxPath)
 
   const entities = GLINER_LABELS[level] || GLINER_LABELS.balanced
-  const results = await glinerInstance.inference({
+  const results = await instance.inference({
     texts: [text],
     entities,
     threshold,
@@ -64,7 +77,6 @@ export async function detectGliner(
 
 /** Download ONNX model from HuggingFace and cache locally (Node.js only) */
 async function resolveOnnxPath(modelId: string): Promise<string> {
-  // Dynamic imports for Node-only modules
   const fs = await import('fs')
   const path = await import('path')
   const https = await import('https')
@@ -99,6 +111,5 @@ async function resolveOnnxPath(modelId: string): Promise<string> {
     get(url)
   })
 
-  console.log(`[pii-engine] Cached: ${onnxPath}`)
   return onnxPath
 }
