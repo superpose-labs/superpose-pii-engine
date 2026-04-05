@@ -1,0 +1,36 @@
+{
+  "name": "@anthropic/superpose-pii-engine",
+  "version": "0.1.0",
+  "description": "Browser-compatible PII masking engine using Regex + GLiNER NER",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "gliner": ">=0.0.19"
+  },
+  "peerDependenciesMeta": {
+    "gliner": { "optional": true }
+  },
+  "devDependencies": {
+    "gliner": "^0.0.19",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  },
+  "license": "MIT"
+}
