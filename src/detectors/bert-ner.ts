@@ -51,6 +51,7 @@ async function getPipeline(
   device: string,
   remoteHost?: string,
   remotePathTemplate?: string,
+  wasmPaths?: string,
 ): Promise<CachedPipeline> {
   if (cached && cached.modelId === modelId && cached.dtype === dtype) {
     return cached
@@ -75,6 +76,12 @@ async function getPipeline(
       transformers.env.allowRemoteModels = true
       transformers.env.remoteHost = remoteHost
       transformers.env.remotePathTemplate = remotePathTemplate || '{model}'
+    }
+    // ORT-Web .wasm / .mjs URL prefix. Defaults to a JSDelivr CDN — set this
+    // when the bundler doesn't ship the wasm files alongside the worker
+    // (Next.js / Webpack workers often don't), or when CDN access is blocked.
+    if (wasmPaths && transformers.env?.backends?.onnx?.wasm) {
+      transformers.env.backends.onnx.wasm.wasmPaths = wasmPaths
     }
     const ner = await pipeline('token-classification', modelId, { dtype, device })
     const wrapped = async (text: string): Promise<RawToken[]> => {
@@ -184,6 +191,7 @@ export async function detectBertNer(
     device,
     options.bertNerRemoteHost,
     options.bertNerRemotePathTemplate,
+    options.bertNerWasmPaths,
   )
   const tokens = await pipeline(text)
 

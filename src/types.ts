@@ -52,4 +52,12 @@ export interface EngineOptions {
   bertNerRemoteHost?: string
   /** Path template appended to remoteHost (default: '{model}'). */
   bertNerRemotePathTemplate?: string
+  /**
+   * Override the URL prefix where ORT Runtime Web .wasm / .mjs files are
+   * fetched from. transformers.js defaults to a JSDelivr CDN; self-hosting
+   * the files makes the load deterministic and removes the runtime dep on
+   * an external CDN. Trailing slash required (matches ORT-Web convention).
+   * Example: 'https://my-cdn.example.com/onnxruntime-web/1.19.2/'
+   */
+  bertNerWasmPaths?: string
 }
