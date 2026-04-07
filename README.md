@@ -19,9 +19,11 @@
 > - **Tauri 2 / Capacitor desktop & mobile shells** when wired up to a Swift sidecar or plugin
 > - **Node.js on macOS** (for evaluation/dev) via the Swift CLI bridge in `superpose-eval`
 >
-> ### If you are shipping to web browsers (including iOS Safari)
+> ### If you are shipping to web browsers
 >
-> Use the **GLiNER backend** (`useGliner: true`). It runs in WebGPU/WASM in any modern browser. Note that the ONNX model is ~900 MB and exceeds iOS Safari memory limits, so iOS Safari users will need to fall back to a degraded path (e.g. server-side masking or no masking).
+> Use **GLiNER** (`useGliner: true`) on **desktop browsers** — best accuracy, runs via ONNX Runtime Web (WASM/WebGPU). The q4f16 ONNX is 472 MB, which is fine on desktop but exceeds iOS Safari's Wasm memory ceiling.
+>
+> Use **BERT-base-NER** (`useBertNer: true`) on **iOS Safari and other mobile browsers** — only ~94 MB at q4f16, the only browser backend that fits on iPhone today. Lower mask-recall than GLiNER but ~100% keep precision at balanced/aggressive levels.
 >
 > ---
 
@@ -39,33 +41,38 @@ User input                          AI sees                              User se
                                                           reconstruct()   here's the info..."
 ```
 
-Detection layers run on the original text. The regex layer is always on; one of two ML backends can be enabled depending on the deployment target:
+Detection layers run on the original text. The regex layer is always on; one of three ML backends can be enabled depending on the deployment target:
 
 1. **Regex** (always on) — catches structured PII with near-perfect accuracy: emails, phones, SSNs, credit cards, API keys, money amounts, IPs, URLs, dates
-2. **GLiNER** (optional, ~1.1 GB ONNX) — a zero-shot NER model that catches names, organizations, locations, and other context-dependent entities. Best accuracy. Runs in browser via ONNX Runtime Web (WASM/WebGPU) or in Node.js.
-3. **Apple NLTagger** (optional, **0 MB**) — uses the built-in `NaturalLanguage.NLTagger` + `NSDataDetector`. **Native Apple code only** — works in iOS / iPadOS / macOS apps that link `NaturalLanguage`, or in Node.js on macOS via the Swift CLI bridge for evaluation. **Does not work in any web browser**, including Safari on macOS or iOS. See the warning at the top of this README.
+2. **GLiNER** (optional, ~1.1 GB ONNX / 472 MB q4f16) — a zero-shot NER model that catches names, organizations, locations, and other context-dependent entities. **Best accuracy.** Runs in browser via ONNX Runtime Web (WASM/WebGPU) or in Node.js. Recommended for desktop browsers and servers where the memory headroom exists.
+3. **BERT-base-NER** (optional, ~94 MB q4f16) — `Xenova/bert-base-NER` (dslim/bert-base-NER fine-tuned on CoNLL-2003) loaded via `@huggingface/transformers`. **The only option that fits in iOS Safari's ~256 MB Wasm memory ceiling.** Detects 4 entity classes (PER / LOC / ORG / MISC) → mapped to NAME / LOC / ORG. Use on mobile browsers; combine with the regex layer for everything structured.
+4. **Apple NLTagger** (optional, **0 MB**) — uses the built-in `NaturalLanguage.NLTagger` + `NSDataDetector`. **Native Apple code only** — works in iOS / iPadOS / macOS apps that link `NaturalLanguage`, or in Node.js on macOS via the Swift CLI bridge for evaluation. **Does not work in any web browser**, including Safari on macOS or iOS. See the warning at the top of this README.
 
 Results are merged, filtered by privacy level, and replaced with placeholders. Reconstruction is a simple deterministic string replacement — no model needed.
 
 ### Backend comparison (1,000-sample evaluation)
 
-| Backend | Pass rate | Macro F1 | Aggressive F1 | Keep precision | Binary cost |
-|---------|----------:|---------:|--------------:|---------------:|------------:|
-| Regex + GLiNER | **93.87%** | **54.3%** | 56.6% | ~50% | ~1.1 GB |
-| Regex + NLTagger (macOS/iOS) | 79.27% | 39.3% | **63.2%** | **96–98%** | **0 MB** |
-| Regex only | TBD | TBD | TBD | TBD | 0 MB |
+| Backend | Pass rate | Macro F1 | Aggressive F1 | Keep precision | Binary cost | Where it runs |
+|---------|----------:|---------:|--------------:|---------------:|------------:|---|
+| Regex + GLiNER | **93.87%** | **54.3%** | 56.6% | ~50% | ~1.1 GB / 472 MB q4f16 | Desktop browser, Node |
+| Regex + BERT-base-NER | 76.23% | 38.8% | **63.2%** | **100% / 100%** (bal/agg) | **~94 MB q4f16** | **iOS Safari**, desktop browser, Node |
+| Regex + NLTagger (macOS/iOS) | 79.27% | 39.3% | **63.2%** | 96–98% | **0 MB** | Native Apple apps only |
+| Regex only | TBD | TBD | TBD | TBD | 0 MB | Anywhere |
 
-GLiNER wins on overall recall. NLTagger wins on safety (almost never over-masks) and ships **for free** on every Apple device.
+GLiNER wins on overall recall and is the right desktop default. BERT-base-NER is the only browser-shippable option for iOS (GLiNER's q4f16 at 472 MB still exceeds iOS Safari's Wasm memory ceiling). NLTagger wins on safety and ships for free on Apple devices but cannot be used from a browser.
 
 ## Install
 
 ```bash
 npm install @superpose/pii-engine
 
-# Optional: install GLiNER for name/org/location detection (browser, server, desktop)
+# Optional: GLiNER for desktop browsers / Node — best accuracy
 npm install gliner
 
-# Optional: build the Apple NLTagger Swift CLI bridge (macOS/iOS only)
+# Optional: BERT-base-NER via transformers.js — only browser-shippable option for iOS
+npm install @huggingface/transformers
+
+# Optional: build the Apple NLTagger Swift CLI bridge (macOS/iOS native only)
 # See "Apple NLTagger Backend (iOS / macOS)" below.
 ```
 
@@ -105,7 +112,34 @@ console.log(result.obfuscatedText)
 // → "Schedule call with [NAME_1] at [ORG_1], [PHONE_1]"
 ```
 
-### With Apple NLTagger (macOS / iOS — zero binary cost)
+### With BERT-base-NER (browser/Node — fits in iOS Safari)
+
+```typescript
+const result = await mask(
+  'Schedule call with Dr. Sarah Chen at Chevron in Houston, 415-555-0199',
+  'aggressive',
+  {
+    useBertNer: true,
+    bertNerDtype: 'q4f16',          // ~94 MB; use 'fp32' in Node if onnxruntime-node has q4f16 issues
+    bertNerThreshold: 0.7,           // default
+  }
+)
+```
+
+To self-host the model files (recommended — avoids HF hub at runtime), set the transformers.js env before calling `mask()`:
+
+```typescript
+import { env } from '@huggingface/transformers'
+env.allowLocalModels = false
+env.allowRemoteModels = true
+env.remoteHost = 'https://my-cdn.example.com'
+env.remotePathTemplate = '{model}'
+// Then call mask() with bertNerModelPath: 'bert-ner/Xenova/bert-base-NER'
+```
+
+Mirror the HuggingFace repo layout under your CDN: `<host>/<modelPath>/(config.json|tokenizer.json|tokenizer_config.json|special_tokens_map.json|vocab.txt|onnx/model_q4f16.onnx)`.
+
+### With Apple NLTagger (macOS / iOS native only — zero binary cost)
 
 ```typescript
 const result = await mask(
@@ -229,6 +263,11 @@ Detect and mask PII in text.
 | `options.glinerThreshold` | `number` | Confidence threshold 0-1 (default: `0.3`) |
 | `options.glinerExecutionProvider` | `string` | ONNX provider: `'cpu'`, `'wasm'`, `'webgpu'` (default: `'cpu'`) |
 | `options.glinerOnnxPath` | `string` | Path to local ONNX file (skips HuggingFace download) |
+| `options.useBertNer` | `boolean` | Enable BERT-base-NER via `@huggingface/transformers` (default: `false`) |
+| `options.bertNerModelPath` | `string` | Model id (default: `'Xenova/bert-base-NER'`) |
+| `options.bertNerDtype` | `string` | ONNX dtype: `'fp32' \| 'fp16' \| 'q8' \| 'int8' \| 'q4' \| 'q4f16' \| 'bnb4'` (default: `'q4f16'`) |
+| `options.bertNerDevice` | `string` | Device: `'wasm' \| 'webgpu' \| 'cpu'` (default: `'wasm'` in browser, `'cpu'` in Node) |
+| `options.bertNerThreshold` | `number` | Confidence threshold 0-1 (default: `0.7`) |
 | `options.useNltagger` | `boolean` | Enable Apple NLTagger backend (macOS/iOS only, default: `false`) |
 | `options.nltaggerBinPath` | `string` | Absolute path to the nltagger Swift CLI binary |
 
@@ -270,8 +309,8 @@ import {
 
 | Type | Example | Detected by | Masked at |
 |------|---------|-------------|-----------|
-| `NAME` | Dr. Sarah Chen | GLiNER, NLTagger | balanced+ |
-| `ORG` | Chevron, Goldman Sachs | GLiNER, NLTagger | balanced+ |
+| `NAME` | Dr. Sarah Chen | GLiNER, BERT-NER, NLTagger | balanced+ |
+| `ORG` | Chevron, Goldman Sachs | GLiNER, BERT-NER, NLTagger | balanced+ |
 | `EMAIL` | sarah@acme.com | Regex, NLTagger | balanced+ |
 | `PHONE` | 415-555-0199 | Regex, NLTagger | balanced+ |
 | `MONEY` | $12M, $4,500.00 | Regex | balanced+ |
@@ -282,7 +321,7 @@ import {
 | `IP` | 192.168.1.100 | Regex | aggressive |
 | `URL` | https://example.com | Regex, NLTagger | aggressive |
 | `DATE` | 2025-03-15, March 15 | Regex, NLTagger | aggressive |
-| `LOC` | New York, Austin TX | GLiNER, NLTagger | aggressive |
+| `LOC` | New York, Austin TX | GLiNER, BERT-NER, NLTagger | aggressive |
 | `ADDRESS` | 123 Main St | GLiNER, NLTagger | aggressive |
 | `TERM` | drilling, laparoscopic | GLiNER | aggressive |
 
@@ -340,18 +379,31 @@ The result is a fully on-device PII pipeline with **0 MB** added to the app bina
 ## Architecture
 
 ```
-text ──► detectRegex() ──────────────► spans[] ──┐
-     └─► detectGliner() (opt, ~1.1GB) ► spans[] ─┤
-     └─► detectNltagger() (opt, 0MB) ─► spans[] ─┤
-                                                  ├──► mergeSpans() ──► filterByLevel() ──► replaceSpans()
-                                                  │         │                                     │
-                                                  │    dedup overlaps                    right-to-left replace
-                                                  │    (longer wins)                     build entityMap
-                                                  │                                           │
-                                                  └────────────────────────────────► { obfuscatedText, entityMap }
+text ──► detectRegex()  (always)                         ┐
+     ├─► detectGliner()    (opt, ~1.1 GB / 472 MB q4f16) ─┤
+     ├─► detectBertNer()   (opt, ~94 MB q4f16)            ┤
+     └─► detectNltagger()  (opt, 0 MB, native Apple only) ┤
+                                                          │
+                              ┌───────────────────────────┘
+                              ▼
+                       mergeSpans()  ──►  filterByLevel()  ──►  replaceSpans()
+                              │                                       │
+                       dedup overlaps                      right-to-left replace
+                       (longer wins)                       build entityMap
+                              │                                       │
+                              └───────────────────────────────────────┴──► { obfuscatedText, entityMap }
 ```
 
-GLiNER and NLTagger are mutually exclusive in practice — pick the one that matches your deployment target. The regex layer is shared between both.
+The three NER backends are mutually exclusive in practice — pick the one that matches your deployment target:
+
+| Target | Recommended backend |
+|---|---|
+| Desktop browser | GLiNER (best accuracy) |
+| Server / Node.js | GLiNER (or NLTagger via Swift CLI on macOS) |
+| **iOS Safari / mobile browser** | **BERT-base-NER** (only one that fits) |
+| Native iOS / macOS app | NLTagger (zero binary cost) |
+
+The regex layer is shared by all three.
 
 ## License
 
