@@ -4,6 +4,7 @@ const SOURCE_PRIORITY: Record<string, number> = {
   regex: 3,
   nltagger: 2,
   gliner: 2,
+  'bert-ner': 2,
 }
 
 /**

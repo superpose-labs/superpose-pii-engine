@@ -10,7 +10,7 @@ export interface Span {
   start: number
   end: number
   type: EntityType
-  source: 'regex' | 'gliner' | 'nltagger'
+  source: 'regex' | 'gliner' | 'nltagger' | 'bert-ner'
   score: number
 }
 
@@ -34,4 +34,14 @@ export interface EngineOptions {
   useNltagger?: boolean
   /** Absolute path to the nltagger Swift CLI binary (Node.js bridge) */
   nltaggerBinPath?: string
+  /** Enable BERT-NER token classifier via @huggingface/transformers (default: false) */
+  useBertNer?: boolean
+  /** HuggingFace model id (default: 'Xenova/bert-base-NER') */
+  bertNerModelPath?: string
+  /** ONNX dtype: 'fp32' | 'fp16' | 'q8' | 'int8' | 'q4' | 'q4f16' | 'bnb4' (default: 'q4f16') */
+  bertNerDtype?: string
+  /** Device backend: 'wasm' | 'webgpu' | 'cpu' (default: 'wasm') */
+  bertNerDevice?: string
+  /** Confidence threshold (default: 0.5) */
+  bertNerThreshold?: number
 }

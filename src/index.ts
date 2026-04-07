@@ -41,6 +41,13 @@ export async function mask(
     allSpans.push(...nltaggerSpans)
   }
 
+  // BERT-NER detection (async, optional, browser/Node via transformers.js)
+  if (options.useBertNer) {
+    const { detectBertNer } = await import('./detectors/bert-ner.js')
+    const bertSpans = await detectBertNer(text, level, options)
+    allSpans.push(...bertSpans)
+  }
+
   // Merge, filter by level, replace
   const merged = mergeSpans(allSpans)
   const filtered = filterSpansByLevel(merged, level)
