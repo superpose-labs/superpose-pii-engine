@@ -1,6 +1,31 @@
 # Superpose PII Engine
 
-A browser-compatible PII (Personally Identifiable Information) detection and masking engine. Runs entirely client-side — no data ever leaves the user's device.
+> ## ⚠️ Important: Apple NLTagger backend does NOT run in any web browser
+>
+> The NLTagger backend uses Apple's `NaturalLanguage` framework, which is **only callable from native Swift/Objective-C code**. It does **not** work in:
+>
+> - **Mobile Safari on iOS / iPadOS** (or any iOS browser — they all use WebKit, which has no NLTagger JS binding)
+> - **Safari on macOS**
+> - **Chrome / Firefox / Edge / Brave on any platform**
+> - **PWAs / "Add to Home Screen"** apps on iOS
+> - **Electron apps** (Chromium-based, no native binding)
+>
+> Apple does not expose `NLTagger` to JavaScript on any platform, and an Apple Developer account does not unlock new browser APIs.
+>
+> ### Where the NLTagger backend *does* work
+>
+> - **Native iOS / iPadOS apps** that embed a `WKWebView` and register a `webkit.messageHandlers` bridge
+> - **Native macOS apps** (SwiftUI / AppKit) that call the engine directly from Swift
+> - **Tauri 2 / Capacitor desktop & mobile shells** when wired up to a Swift sidecar or plugin
+> - **Node.js on macOS** (for evaluation/dev) via the Swift CLI bridge in `superpose-eval`
+>
+> ### If you are shipping to web browsers (including iOS Safari)
+>
+> Use the **GLiNER backend** (`useGliner: true`). It runs in WebGPU/WASM in any modern browser. Note that the ONNX model is ~900 MB and exceeds iOS Safari memory limits, so iOS Safari users will need to fall back to a degraded path (e.g. server-side masking or no masking).
+>
+> ---
+
+A PII (Personally Identifiable Information) detection and masking engine. Runs entirely client-side — no data ever leaves the user's device when using the GLiNER (browser/Node) or NLTagger (native Apple) backends.
 
 Superpose PII Engine powers the privacy layer in [Superpose](https://superpose.us), replacing sensitive information with typed placeholders (`[NAME_1]`, `[PHONE_1]`, etc.) before text is sent to any AI model, then restoring them in the response.
 
@@ -18,7 +43,7 @@ Detection layers run on the original text. The regex layer is always on; one of 
 
 1. **Regex** (always on) — catches structured PII with near-perfect accuracy: emails, phones, SSNs, credit cards, API keys, money amounts, IPs, URLs, dates
 2. **GLiNER** (optional, ~1.1 GB ONNX) — a zero-shot NER model that catches names, organizations, locations, and other context-dependent entities. Best accuracy. Runs in browser via ONNX Runtime Web (WASM/WebGPU) or in Node.js.
-3. **Apple NLTagger** (optional, **0 MB**) — uses the built-in `NaturalLanguage.NLTagger` + `NSDataDetector` on macOS/iOS. Zero binary cost, fastest runtime, ideal for shipping to iOS apps and macOS desktop apps.
+3. **Apple NLTagger** (optional, **0 MB**) — uses the built-in `NaturalLanguage.NLTagger` + `NSDataDetector`. **Native Apple code only** — works in iOS / iPadOS / macOS apps that link `NaturalLanguage`, or in Node.js on macOS via the Swift CLI bridge for evaluation. **Does not work in any web browser**, including Safari on macOS or iOS. See the warning at the top of this README.
 
 Results are merged, filtered by privacy level, and replaced with placeholders. Reconstruction is a simple deterministic string replacement — no model needed.
 
