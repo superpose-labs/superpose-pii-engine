@@ -139,11 +139,20 @@ function aggregate(
       .trim()
 
     if (word && word.length >= 3) {
-      // Find the word starting at or after the current cursor.
-      const idx = text.indexOf(word, cursor)
+      // Find the word starting at or after the current cursor. Try
+      // case-sensitive first, then fall back to case-insensitive — uncased
+      // models (e.g. mozilla-ai/tiny-pii-tinyBERT) lowercase their tokens
+      // and won't match capitalized words in the original text otherwise.
+      let idx = text.indexOf(word, cursor)
+      if (idx === -1) {
+        const lowerText = text.toLowerCase()
+        const lowerWord = word.toLowerCase()
+        idx = lowerText.indexOf(lowerWord, cursor)
+      }
       if (idx !== -1) {
+        const realValue = text.slice(idx, idx + word.length)
         spans.push({
-          value: word,
+          value: realValue,
           start: idx,
           end: idx + word.length,
           type: mapped,
