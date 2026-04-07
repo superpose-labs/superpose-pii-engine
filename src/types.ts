@@ -73,4 +73,12 @@ export interface EngineOptions {
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   bertNerSessionOptions?: Record<string, any>
+  /**
+   * Override the model-label → internal-EntityType mapping. Defaults to the
+   * dslim/bert-base-NER schema (PER → NAME, ORG → ORG, LOC → LOC, MISC → ENT).
+   * Set this when using a different token-classification model with its own
+   * label vocabulary, e.g. mozilla-ai/tiny-pii-tinyBERT (GIVENNAME → NAME,
+   * TELEPHONENUM → PHONE, etc.).
+   */
+  bertNerLabelMap?: Record<string, EntityType>
 }

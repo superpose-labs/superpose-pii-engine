@@ -38,7 +38,7 @@ interface RawToken {
 let cached: CachedPipeline | null = null
 let initPromise: Promise<CachedPipeline> | null = null
 
-const LABEL_TO_TYPE: Record<string, Span['type']> = {
+const DEFAULT_LABEL_TO_TYPE: Record<string, Span['type']> = {
   PER: 'NAME',
   ORG: 'ORG',
   LOC: 'LOC',
@@ -109,7 +109,12 @@ async function getPipeline(
  * model variant, so we aggregate manually. Subword pieces are joined by
  * stripping the `##` continuation marker.
  */
-function aggregate(tokens: RawToken[], text: string, threshold: number): Span[] {
+function aggregate(
+  tokens: RawToken[],
+  text: string,
+  threshold: number,
+  labelMap: Record<string, Span['type']>,
+): Span[] {
   const spans: Span[] = []
   let buf: { label: string; pieces: string[]; score: number; count: number } | null = null
   let cursor = 0 // last position we matched in `text`
@@ -121,7 +126,7 @@ function aggregate(tokens: RawToken[], text: string, threshold: number): Span[] 
       buf = null
       return
     }
-    const mapped = LABEL_TO_TYPE[buf.label]
+    const mapped = labelMap[buf.label]
     if (!mapped || mapped === 'ENT') {
       buf = null
       return
@@ -191,6 +196,7 @@ export async function detectBertNer(
   // length below, this rejects subword-tokenization fragments like "SS"
   // (from "SSN" → "SS" + "##N" → mis-tagged at 0.99).
   const threshold = options.bertNerThreshold ?? 0.7
+  const labelMap = options.bertNerLabelMap || DEFAULT_LABEL_TO_TYPE
 
   const { pipeline } = await getPipeline(
     modelId,
@@ -210,7 +216,7 @@ export async function detectBertNer(
     for (const tok of tokens) {
       if (tok.score < threshold) continue
       const rawLabel = (tok.entity || '').replace(/^[BI]-/, '')
-      const mapped = LABEL_TO_TYPE[rawLabel]
+      const mapped = labelMap[rawLabel]
       if (!mapped || mapped === 'ENT') continue
       if (typeof tok.start !== 'number' || typeof tok.end !== 'number') continue
       const value = text.slice(tok.start, tok.end)
@@ -228,5 +234,5 @@ export async function detectBertNer(
   }
 
   // Slow path: aggregate B-/I- runs and re-index by string match.
-  return aggregate(tokens, text, threshold)
+  return aggregate(tokens, text, threshold, labelMap)
 }
