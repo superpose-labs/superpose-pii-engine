@@ -1,6 +1,6 @@
 {
   "name": "@superpose/pii-engine",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Browser-compatible PII masking engine using Regex + GLiNER NER",
   "type": "module",
   "main": "./dist/index.cjs",

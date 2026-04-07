@@ -52,6 +52,8 @@ async function getPipeline(
   remoteHost?: string,
   remotePathTemplate?: string,
   wasmPaths?: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sessionOptions?: Record<string, any>,
 ): Promise<CachedPipeline> {
   if (cached && cached.modelId === modelId && cached.dtype === dtype) {
     return cached
@@ -83,7 +85,12 @@ async function getPipeline(
     if (wasmPaths && transformers.env?.backends?.onnx?.wasm) {
       transformers.env.backends.onnx.wasm.wasmPaths = wasmPaths
     }
-    const ner = await pipeline('token-classification', modelId, { dtype, device })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pipelineOptions: Record<string, any> = { dtype, device }
+    if (sessionOptions) {
+      pipelineOptions.session_options = sessionOptions
+    }
+    const ner = await pipeline('token-classification', modelId, pipelineOptions)
     const wrapped = async (text: string): Promise<RawToken[]> => {
       const out = await ner(text)
       return Array.isArray(out) ? (out as RawToken[]) : []
@@ -192,6 +199,7 @@ export async function detectBertNer(
     options.bertNerRemoteHost,
     options.bertNerRemotePathTemplate,
     options.bertNerWasmPaths,
+    options.bertNerSessionOptions,
   )
   const tokens = await pipeline(text)
 

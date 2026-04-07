@@ -60,4 +60,17 @@ export interface EngineOptions {
    * Example: 'https://my-cdn.example.com/onnxruntime-web/1.19.2/'
    */
   bertNerWasmPaths?: string
+  /**
+   * ORT Inference Session options forwarded to transformers.js pipeline().
+   * Use this to lower memory pressure on constrained devices (iOS Safari):
+   *
+   *   bertNerSessionOptions: {
+   *     enableMemPattern: false,
+   *     enableCpuMemArena: false,
+   *     executionMode: 'sequential',
+   *     graphOptimizationLevel: 'all',
+   *   }
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  bertNerSessionOptions?: Record<string, any>
 }
