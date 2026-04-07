@@ -49,6 +49,8 @@ async function getPipeline(
   modelId: string,
   dtype: string,
   device: string,
+  remoteHost?: string,
+  remotePathTemplate?: string,
 ): Promise<CachedPipeline> {
   if (cached && cached.modelId === modelId && cached.dtype === dtype) {
     return cached
@@ -63,6 +65,16 @@ async function getPipeline(
       throw new Error(
         '@huggingface/transformers is installed but pipeline() export was not found',
       )
+    }
+    // Configure the env on the SAME transformers module instance the
+    // pipeline() call below will use. Setting env from outside this module
+    // (e.g. in a Web Worker that imports transformers separately) does not
+    // reliably reach this scope when bundlers split chunks.
+    if (remoteHost && transformers.env) {
+      transformers.env.allowLocalModels = false
+      transformers.env.allowRemoteModels = true
+      transformers.env.remoteHost = remoteHost
+      transformers.env.remotePathTemplate = remotePathTemplate || '{model}'
     }
     const ner = await pipeline('token-classification', modelId, { dtype, device })
     const wrapped = async (text: string): Promise<RawToken[]> => {
@@ -166,7 +178,13 @@ export async function detectBertNer(
   // (from "SSN" → "SS" + "##N" → mis-tagged at 0.99).
   const threshold = options.bertNerThreshold ?? 0.7
 
-  const { pipeline } = await getPipeline(modelId, dtype, device)
+  const { pipeline } = await getPipeline(
+    modelId,
+    dtype,
+    device,
+    options.bertNerRemoteHost,
+    options.bertNerRemotePathTemplate,
+  )
   const tokens = await pipeline(text)
 
   // Fast path: if the runtime did surface start/end, prefer that.

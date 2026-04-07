@@ -44,4 +44,12 @@ export interface EngineOptions {
   bertNerDevice?: string
   /** Confidence threshold (default: 0.5) */
   bertNerThreshold?: number
+  /**
+   * Override the transformers.js remote host. When set, model files are
+   * fetched from this URL instead of the HuggingFace Hub. The bucket layout
+   * must mirror a HF repo: <host>/<modelPath>/(config.json|tokenizer.json|onnx/model_*.onnx)
+   */
+  bertNerRemoteHost?: string
+  /** Path template appended to remoteHost (default: '{model}'). */
+  bertNerRemotePathTemplate?: string
 }
