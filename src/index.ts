@@ -34,6 +34,13 @@ export async function mask(
     allSpans.push(...glinerSpans)
   }
 
+  // Apple NLTagger detection (async, optional, macOS/iOS only)
+  if (options.useNltagger) {
+    const { detectNltagger } = await import('./detectors/nltagger.js')
+    const nltaggerSpans = await detectNltagger(text, level, options)
+    allSpans.push(...nltaggerSpans)
+  }
+
   // Merge, filter by level, replace
   const merged = mergeSpans(allSpans)
   const filtered = filterSpansByLevel(merged, level)

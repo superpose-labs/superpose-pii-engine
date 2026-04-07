@@ -2,6 +2,7 @@ import type { Span } from './types.js'
 
 const SOURCE_PRIORITY: Record<string, number> = {
   regex: 3,
+  nltagger: 2,
   gliner: 2,
 }
 

@@ -10,7 +10,7 @@ export interface Span {
   start: number
   end: number
   type: EntityType
-  source: 'regex' | 'gliner'
+  source: 'regex' | 'gliner' | 'nltagger'
   score: number
 }
 
@@ -30,4 +30,8 @@ export interface EngineOptions {
   glinerExecutionProvider?: string
   /** Path to a local ONNX model file (skips download) */
   glinerOnnxPath?: string
+  /** Enable Apple NLTagger + NSDataDetector (macOS/iOS only, default: false) */
+  useNltagger?: boolean
+  /** Absolute path to the nltagger Swift CLI binary (Node.js bridge) */
+  nltaggerBinPath?: string
 }
