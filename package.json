@@ -1,6 +1,6 @@
 {
   "name": "@superpose/pii-engine",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Browser-compatible PII masking engine using Regex + GLiNER NER",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -24,7 +24,7 @@
   },
   "peerDependencies": {
     "gliner": ">=0.0.19",
-    "@huggingface/transformers": ">=4.0.0"
+    "@huggingface/transformers": ">=3.8.0"
   },
   "peerDependenciesMeta": {
     "gliner": {
